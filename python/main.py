@@ -1,4 +1,5 @@
 import csv
+import os
 from random import shuffle, choice
 import time
 
@@ -34,14 +35,55 @@ class DataHandler:
         labels = [data[-1] for data in dataset]  # The label is the last element in each row
         return features, labels
 
+    def get_file_timestamp(self, filepath):
+        try:
+            return os.path.getmtime(filepath)
+        except OSError:
+            return 0
+
+    def write_normalized_data(self, normalized_data, filepath):
+        with open(filepath, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(normalized_data)
+
+    def read_normalized_data(self, filepath):
+        with open(filepath, 'r') as file:
+            csv_reader = csv.reader(file)
+            normalized_data = [list(map(float, row)) for row in csv_reader]
+        return normalized_data
+
     def preprocess_data(self, normalizer_classes):
         dataset = self.read_csv()
         train_data, test_data = self.train_test_split(dataset, test_size=0.2)
         train_features, train_labels = self.separate_features_labels(train_data)
         test_features, test_labels = self.separate_features_labels(test_data)
 
-        normalized_train_features = {normalizer_class.__name__: normalizer_class().normalize(train_features) for normalizer_class in normalizer_classes}
-        normalized_test_features = {normalizer_class.__name__: normalizer_class().normalize(test_features) for normalizer_class in normalizer_classes}
+        normalized_train_features = {}
+        normalized_test_features = {}
+
+        for normalizer_class in normalizer_classes:
+            normalizer_name = normalizer_class.__name__
+            normalized_train_file = f'normalized_train_{normalizer_name}.csv'
+            normalized_test_file = f'normalized_test_{normalizer_name}.csv'
+
+            source_timestamp = self.get_file_timestamp(self.filepath)
+            train_timestamp = self.get_file_timestamp(normalized_train_file)
+            test_timestamp = self.get_file_timestamp(normalized_test_file)
+
+            if train_timestamp > source_timestamp and test_timestamp > source_timestamp:
+                # Read from cached normalized data
+                normalized_train_features[normalizer_name] = self.read_normalized_data(normalized_train_file)
+                normalized_test_features[normalizer_name] = self.read_normalized_data(normalized_test_file)
+            else:
+                # Normalize the data
+                normalizer = normalizer_class()
+                normalized_train = normalizer.normalize(train_features)
+                normalized_test = normalizer.normalize(test_features)
+                normalized_train_features[normalizer_name] = normalized_train
+                normalized_test_features[normalizer_name] = normalized_test
+                # Write normalized data to CSV files
+                self.write_normalized_data(normalized_train, normalized_train_file)
+                self.write_normalized_data(normalized_test, normalized_test_file)
 
         return normalized_train_features, train_labels, normalized_test_features, test_labels
 
@@ -165,34 +207,34 @@ def main():
         for classifier in classifiers:
             # Print the training message without a newline
             print(f"Training {classifier} with {normalizer_name}...", end='')
-
+            
             # Initialize and train the classifier
             start_time = time.time()
             classifier.fit(train_features, train_labels)
             fit_time = time.time() - start_time
-
+            
             # Save the trained classifier for later use
             trained_models[(normalizer_name, str(classifier))] = classifier
-
+            
             # Predict on the corresponding test set
             start_time = time.time()
             test_features = normalized_test_features[normalizer_name]
             predictions = classifier.predict(test_features)
             predict_time = time.time() - start_time
-
+            
             # Calculate total time
             total_time = fit_time + predict_time
-
+            
             # Generate the classification report
             report = classifier.classification_report(test_labels, predictions)
-
+            
             # Calculate overall metrics using the new method
             accuracy, precision, recall, f1_score = classifier.overall_metrics(report)
-
+            
             # Create a TestResult object and store it
             result = TestResult(normalizer_name, str(classifier), accuracy, precision, recall, f1_score, fit_time, predict_time)
             test_results.append(result)
-
+            
             # Print the elapsed time
             print(f" Done. Total time: {total_time:.2f}s")
 
@@ -222,7 +264,7 @@ def main():
             normalizer = next(n for n in normalizer_classes if n.__name__ == normalizer_name)()
             normalized_banana_features = normalizer.normalize([banana_features])[0]
             prediction = classifier.predict([normalized_banana_features])[0]
-            print(f"Using {normalizer_name} normalization and {classifier_name} classifier, the banana is predicted to be: {prediction}")
+            print(f"Using {normalizer_name} and {classifier_name} classifier, the banana is predicted to be: {prediction}")
 
     print()
 

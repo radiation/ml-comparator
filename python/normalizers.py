@@ -22,7 +22,10 @@ class MinMaxNormalizer(Normalizer):
         normalized_features = []
 
         for row in features:
-            normalized_row = [(row[i] - min_vals[i]) / (max_vals[i] - min_vals[i]) for i in range(len(row))]
+            normalized_row = [
+                (row[i] - min_vals[i]) / (max_vals[i] - min_vals[i]) if (max_vals[i] - min_vals[i]) != 0 else 0
+                for i in range(len(row))
+            ]
             normalized_features.append(normalized_row)
 
         return normalized_features
@@ -35,11 +38,14 @@ class ZScoreNormalizer(Normalizer):
     def normalize(self, features):
         columns = list(zip(*features))
         means = [sum(column) / len(column) for column in columns]
-        std_devs = [math.sqrt(sum([(x - mean) ** 2 for x in column]) / len(column)) for column, mean in zip(columns, means)]
+        std_devs = [((sum([(x - mean) ** 2 for x in column]) / len(column)) ** 0.5) for column, mean in zip(columns, means)]
         normalized_features = []
 
         for row in features:
-            normalized_row = [(row[i] - means[i]) / std_devs[i] for i in range(len(row))]
+            normalized_row = [
+                (row[i] - means[i]) / std_devs[i] if std_devs[i] != 0 else 0
+                for i in range(len(row))
+            ]
             normalized_features.append(normalized_row)
 
         return normalized_features
@@ -52,11 +58,13 @@ class DecimalNormalizer(Normalizer):
     def normalize(self, features):
         columns = list(zip(*features))
         max_abs_vals = [max(abs(x) for x in column) for column in columns]
-        j_vals = [math.ceil(math.log10(max_abs_val + 1)) for max_abs_val in max_abs_vals]
         normalized_features = []
 
         for row in features:
-            normalized_row = [row[i] / (10 ** j_vals[i]) for i in range(len(row))]
+            normalized_row = [
+                row[i] / max_abs_vals[i] if max_abs_vals[i] != 0 else 0
+                for i in range(len(row))
+            ]
             normalized_features.append(normalized_row)
 
         return normalized_features

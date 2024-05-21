@@ -63,8 +63,8 @@ class DataHandler:
 
         for normalizer_class in normalizer_classes:
             normalizer_name = normalizer_class.__name__
-            normalized_train_file = f'normalized_train_{normalizer_name}.csv'
-            normalized_test_file = f'normalized_test_{normalizer_name}.csv'
+            normalized_train_file = f'data/normalized_train_{normalizer_name}.csv'
+            normalized_test_file = f'data/normalized_test_{normalizer_name}.csv'
 
             source_timestamp = self.get_file_timestamp(self.filepath)
             train_timestamp = self.get_file_timestamp(normalized_train_file)
@@ -148,19 +148,21 @@ class Banana:
         self.harvest_time = harvest_time
         self.ripeness = ripeness
         self.acidity = acidity
+        self.prediction = None
 
     def get_features(self):
         return [self.size, self.weight, self.sweetness, self.softness, self.harvest_time, self.ripeness, self.acidity]
 
     def __str__(self):
         return (f"Banana(size={self.size}, weight={self.weight}, sweetness={self.sweetness}, softness={self.softness}, "
-                f"harvest_time={self.harvest_time}, ripeness={self.ripeness}, acidity={self.acidity})")
+                f"harvest_time={self.harvest_time}, ripeness={self.ripeness}, acidity={self.acidity}, prediction={self.prediction})")
 
     # Method to predict the quality of a banana
     def test_quality(self, classifier, normalizer=None):
         features = self.get_features()
         normalized_features = normalizer.normalize([features])[0]
         prediction = classifier.predict([normalized_features])[0]
+        self.prediction = prediction
         return prediction
 
     # Static method to encapsulate the banana input process
@@ -180,7 +182,7 @@ class Banana:
 def main():
 
     # Define the path to the CSV file containing the Iris dataset
-    filepath = '../banana_quality.csv'
+    filepath = 'data/banana_quality.csv'
     data_handler = DataHandler(filepath)
     
     # Get user input for normalizers
@@ -291,16 +293,6 @@ def get_classifier_instances(choice):
             return [SVMClassifier()]
         case "4":
             return [NaiveBayesClassifier(), KNNClassifier(), SVMClassifier()]
-
-def display_results(classifier, report, fit_time, predict_time):
-    print(f"\n{classifier}:\n")
-    for label, metrics in report.items():
-        print(f"\tClass {label}:")
-        for metric, value in metrics.items():
-            print(f"\t\t{metric}: {value:.2f}")
-        print()
-    print(f"\tFit time: {fit_time:.4f}s")
-    print(f"\tPrediction time: {predict_time:.4f}s")
 
 def get_test_ratio():
     while True:

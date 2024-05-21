@@ -5,39 +5,46 @@ import math
 # Define a base class for ML classifiers so we can reuse the predict & report methods
 class MLClassifier:
     def __init__(self):
-        # Initialize the classifier
         pass
 
-    def predict(self, x):
-        # Predict a list of feature sets
-        return [self.predict_single(features) for features in x]
+    def fit(self, X, y):
+        raise NotImplementedError("This method should be overridden by subclasses.")
 
-    # Generate a classification report for the predictions
+    def predict_single(self, input_features):
+        raise NotImplementedError("This method should be overridden by subclasses.")
+
+    def predict(self, X):
+        return [self.predict_single(features) for features in X]
+
     def classification_report(self, y_true, y_pred):
         unique_labels = set(y_true)
         report = {}
         for label in unique_labels:
-
-            # Calculate true positives, false positives, false negatives, and true negatives
             tp = sum(1 for i in range(len(y_true)) if y_true[i] == label and y_pred[i] == label)
             fp = sum(1 for i in range(len(y_true)) if y_true[i] != label and y_pred[i] == label)
             fn = sum(1 for i in range(len(y_true)) if y_true[i] == label and y_pred[i] != label)
             tn = sum(1 for i in range(len(y_true)) if y_true[i] != label and y_pred[i] != label)
 
-            # Calculate precision, recall, and F1-score for each class
-            precision = tp / (tp + fp) if tp + fp > 0 else 0
-            recall = tp / (tp + fn) if tp + fn > 0 else 0
-            f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
-            accuracy = (tp + tn) / len(y_true)
+            precision = tp / (tp + fp) if (tp + fp) != 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) != 0 else 0
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
+            accuracy = (tp + tn) / (tp + fp + fn + tn) if (tp + fp + fn + tn) != 0 else 0
 
             report[label] = {
-                'Precision': precision,
-                'Recall': recall,
-                'F1-score': f1,
-                'Accuracy': accuracy
+                "precision": precision,
+                "recall": recall,
+                "f1-score": f1,
+                "accuracy": accuracy
             }
 
         return report
+
+    def overall_metrics(self, report):
+        accuracy = sum(report[label]['accuracy'] for label in report) / len(report)
+        precision = sum(report[label]['precision'] for label in report) / len(report)
+        recall = sum(report[label]['recall'] for label in report) / len(report)
+        f1_score = sum(report[label]['f1-score'] for label in report) / len(report)
+        return accuracy, precision, recall, f1_score
 
 # Naive Bayes classifier
 class NaiveBayesClassifier(MLClassifier):
@@ -120,7 +127,7 @@ class KNNClassifier(MLClassifier):
         return max(counts, key=counts.get)
 
     def __str__(self):
-        return "K Nearest Neighbors"
+        return f"K ({self.k}) Nearest Neighbors"
 
 # Support Vector Machine classifier
 class SVMClassifier(MLClassifier):

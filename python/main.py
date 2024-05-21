@@ -47,43 +47,54 @@ class DataHandler:
 
 # We want to store the results of each test run so we can compare them later
 class TestResult:
-    def __init__(self, normalizer_name, classifier_name, accuracy, precision, recall, f1_score):
-        self.__normalizer_name = normalizer_name
-        self.__classifier_name = classifier_name
-        self.__accuracy = accuracy
-        self.__precision = precision
-        self.__recall = recall
-        self.__f1_score = f1_score
+    def __init__(self, normalizer_name, classifier_name, accuracy, precision, recall, f1_score, fit_time, predict_time):
+        self._normalizer_name = normalizer_name
+        self._classifier_name = classifier_name
+        self._accuracy = accuracy
+        self._precision = precision
+        self._recall = recall
+        self._f1_score = f1_score
+        self._fit_time = fit_time
+        self._predict_time = predict_time
 
-    def __str__(self):
-        return (f"Normalizer: {self.__normalizer_name}, Classifier: {self.__classifier_name}, "
-                f"Accuracy: {self.__accuracy:.2f}, Precision: {self.__precision:.2f}, "
-                f"Recall: {self.__recall:.2f}, F1 Score: {self.__f1_score:.2f}")
+    def __repr__(self):
+        return (f"TestResult(normalizer_name={self._normalizer_name!r}, classifier_name={self._classifier_name!r}, "
+                f"accuracy={self._accuracy:.2f}, precision={self._precision:.2f}, "
+                f"recall={self._recall:.2f}, f1_score={self._f1_score:.2f}, "
+                f"fit_time={self._fit_time:.2f}s, predict_time={self._predict_time:.2f}s)")
 
     # Getter methods
     @property
     def normalizer_name(self):
-        return self.__normalizer_name
+        return self._normalizer_name
 
     @property
     def classifier_name(self):
-        return self.__classifier_name
+        return self._classifier_name
 
     @property
     def accuracy(self):
-        return self.__accuracy
+        return self._accuracy
 
     @property
     def precision(self):
-        return self.__precision
+        return self._precision
 
     @property
     def recall(self):
-        return self.__recall
+        return self._recall
 
     @property
     def f1_score(self):
-        return self.__f1_score
+        return self._f1_score
+
+    @property
+    def fit_time(self):
+        return self._fit_time
+
+    @property
+    def predict_time(self):
+        return self._predict_time
 
 # Define the banana object
 class Banana:
@@ -131,46 +142,87 @@ def main():
     data_handler = DataHandler(filepath)
     
     # Get user input for normalizers
-    normalizer_choice = input("Choose a normalizer: (1) Min-Max (2) Z-Score (3) Decimal (4) All (5) None: ")
+    normalizer_choice = input("Choose a normalizer: (1) Min-Max; (2) Z-Score; (3) Decimal; (4) All; (5) None: ")
     normalizer_classes = get_normalizer_classes(normalizer_choice)
     
     # Get user input for classifiers
-    algorithm_choice = input("Choose an algorithm: (1) Naive Bayes (2) KNN (3) SVM (4) All: ")
+    algorithm_choice = input("Choose an algorithm: (1) Naive Bayes; (2) KNN; (3) SVM; (4) All: ")
     classifiers = get_classifier_instances(algorithm_choice)
-    
+
+    # Check if KNNClassifier is in the list and replace add number of neighbors if necessary
+    if any(isinstance(clf, KNNClassifier) for clf in classifiers):
+        k = int(input("Enter the number of neighbors for KNN: "))
+        classifiers = [KNNClassifier(k) if isinstance(clf, KNNClassifier) else clf for clf in classifiers]
+
     # Preprocess data with the chosen normalizers
     normalized_train_features, train_labels, normalized_test_features, test_labels = data_handler.preprocess_data(normalizer_classes)
 
     test_results = []
+    trained_models = {}
 
     # Iterate through each normalized dataset
     for normalizer_name, train_features in normalized_train_features.items():
-        print(f"Training with {normalizer_name} normalization:")
-        
-        # Iterate through each classifier
         for classifier in classifiers:
+            # Print the training message without a newline
+            print(f"Training {classifier} with {normalizer_name}...", end='')
 
-            # Add result to test_results
-
-            start_time = time.time()
             # Initialize and train the classifier
+            start_time = time.time()
             classifier.fit(train_features, train_labels)
             fit_time = time.time() - start_time
 
+            # Save the trained classifier for later use
+            trained_models[(normalizer_name, str(classifier))] = classifier
+
             # Predict on the corresponding test set
-            test_features = normalized_test_features[normalizer_name]
             start_time = time.time()
+            test_features = normalized_test_features[normalizer_name]
             predictions = classifier.predict(test_features)
             predict_time = time.time() - start_time
 
-            # Generate and print the classification report
+            # Calculate total time
+            total_time = fit_time + predict_time
+
+            # Generate the classification report
             report = classifier.classification_report(test_labels, predictions)
 
-            for label, metrics in report.items():
-                print(f"Class {label}:")
-                for metric, value in metrics.items():
-                    print(f"\t{metric}: {value:.2f}")
-            print()
+            # Calculate overall metrics using the new method
+            accuracy, precision, recall, f1_score = classifier.overall_metrics(report)
+
+            # Create a TestResult object and store it
+            result = TestResult(normalizer_name, str(classifier), accuracy, precision, recall, f1_score, fit_time, predict_time)
+            test_results.append(result)
+
+            # Print the elapsed time
+            print(f" Done. Total time: {total_time:.2f}s")
+
+    # Sort the results by accuracy in descending order
+    test_results.sort(key=lambda x: x.accuracy, reverse=True)
+
+    # Print header for results
+    print("\n{:<25} {:<25} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10}".format(
+        "Classifier", "Normalizer", "Accuracy", "Precision", "Recall", "F1 Score", "Train(s)", "Predict(s)"
+    ))
+
+    # Display the sorted results
+    for result in test_results:
+        print("{:<25} {:<25} {:<10.2f} {:<10.2f} {:<10.2f} {:<10.2f} {:<15.2f} {:<15.2f}".format(
+            result.classifier_name, result.normalizer_name, result.accuracy, result.precision, result.recall, result.f1_score, result.fit_time, result.predict_time
+        ))
+
+    while input("Would you like to test a banana? (y/n): ").lower() == 'y':
+        # Read the header and an example line from the CSV file
+        header, example_line = data_handler.read_example()
+
+        # Predict the quality of a new banana
+        new_banana = Banana.prompt_banana_details(header, example_line)
+        banana_features = new_banana.get_features()
+
+        for (normalizer_name, classifier_name), classifier in trained_models.items():
+            normalizer = next(n for n in normalizer_classes if n.__name__ == normalizer_name)()
+            normalized_banana_features = normalizer.normalize([banana_features])[0]
+            prediction = classifier.predict([normalized_banana_features])[0]
+            print(f"Using {normalizer_name} normalization and {classifier_name} classifier, the banana is predicted to be: {prediction}")
 
     print()
 

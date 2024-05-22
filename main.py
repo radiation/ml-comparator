@@ -8,9 +8,11 @@ from classifiers import NaiveBayesClassifier, KNNClassifier, SVMClassifier
 
 # Define a class to handle data operations
 class DataHandler:
-    def __init__(self, filepath):
+    def __init__(self, filepath, test_size=0.2):
         self.filepath = filepath
+        self.test_size = test_size
 
+    # Read the entire file
     def read_csv(self):
         with open(self.filepath, 'r') as file:
             csv_reader = csv.reader(file)
@@ -18,6 +20,7 @@ class DataHandler:
             dataset = [row for row in csv_reader]
         return dataset
 
+    # Read a random example from the file
     def read_example(self):
         with open(self.filepath, 'r') as file:
             csv_reader = csv.reader(file)
@@ -25,47 +28,55 @@ class DataHandler:
             example_line = choice(list(csv_reader))  # Choose a random line
         return header, example_line
 
+    # Split the dataset into training and testing sets
     def train_test_split(self, dataset, test_size):
         shuffle(dataset)
         split_index = int(len(dataset) * (1 - test_size))
         return dataset[:split_index], dataset[split_index:]
 
+    # Separate the features and labels
     def separate_features_labels(self, dataset):
         features = [list(map(float, data[:-1])) for data in dataset]  # Exclude the label
         labels = [data[-1] for data in dataset]  # The label is the last element in each row
         return features, labels
 
+    # Get the timestamp of a file; we use this to see if the normalized data is up-to-date
     def get_file_timestamp(self, filepath):
         try:
             return os.path.getmtime(filepath)
         except OSError:
             return 0
 
+    # Write the normalized data to a CSV file
     def write_normalized_data(self, normalized_data, filepath):
         with open(filepath, 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerows(normalized_data)
 
+    # Read the normalized data from a CSV file
     def read_normalized_data(self, filepath):
         with open(filepath, 'r') as file:
             csv_reader = csv.reader(file)
             normalized_data = [list(map(float, row)) for row in csv_reader]
         return normalized_data
 
+    # Preprocess the data and return the normalized training and testing features
     def preprocess_data(self, normalizer_classes):
         dataset = self.read_csv()
-        train_data, test_data = self.train_test_split(dataset, test_size=0.2)
+        train_data, test_data = self.train_test_split(dataset, test_size=self.test_size)
         train_features, train_labels = self.separate_features_labels(train_data)
         test_features, test_labels = self.separate_features_labels(test_data)
 
         normalized_train_features = {}
         normalized_test_features = {}
 
+        # Iterate through each normalizer class that the user has selected
         for normalizer_class in normalizer_classes:
             normalizer_name = normalizer_class.__name__
             normalized_train_file = f'data/normalized_train_{normalizer_name}.csv'
             normalized_test_file = f'data/normalized_test_{normalizer_name}.csv'
 
+            # Check if the normalized data is up-to-date
             source_timestamp = self.get_file_timestamp(self.filepath)
             train_timestamp = self.get_file_timestamp(normalized_train_file)
             test_timestamp = self.get_file_timestamp(normalized_test_file)
@@ -99,7 +110,7 @@ class TestResult:
         self._fit_time = fit_time
         self._predict_time = predict_time
 
-    def __repr__(self):
+    def __str__(self):
         return (f"TestResult(normalizer_name={self._normalizer_name!r}, classifier_name={self._classifier_name!r}, "
                 f"accuracy={self._accuracy:.2f}, precision={self._precision:.2f}, "
                 f"recall={self._recall:.2f}, f1_score={self._f1_score:.2f}, "
@@ -150,9 +161,11 @@ class Banana:
         self.acidity = acidity
         self.prediction = None
 
+    # Method to get the features of a banana
     def get_features(self):
         return [self.size, self.weight, self.sweetness, self.softness, self.harvest_time, self.ripeness, self.acidity]
 
+    # Method to print the banana object
     def __str__(self):
         return (f"Banana(size={self.size}, weight={self.weight}, sweetness={self.sweetness}, softness={self.softness}, "
                 f"harvest_time={self.harvest_time}, ripeness={self.ripeness}, acidity={self.acidity}, prediction={self.prediction})")
@@ -183,7 +196,7 @@ def main():
 
     # Define the path to the CSV file containing the Iris dataset
     filepath = 'data/banana_quality.csv'
-    data_handler = DataHandler(filepath)
+    data_handler = DataHandler(filepath, get_test_ratio())
     
     # Get user input for normalizers
     normalizer_choice = input("Choose a normalizer: (1) Min-Max; (2) Z-Score; (3) Decimal; (4) All; (5) None: ")
@@ -270,6 +283,7 @@ def main():
 
     print()
 
+# Define helper functions to get the normalizer classes and classifier instances
 def get_normalizer_classes(choice):
     match choice:
         case "1":
@@ -294,10 +308,11 @@ def get_classifier_instances(choice):
         case "4":
             return [NaiveBayesClassifier(), KNNClassifier(), SVMClassifier()]
 
+# Define a function to get the test ratio
 def get_test_ratio():
     while True:
         try:
-            test_percentage = float(input("What ratio of data would you like to use for testing (0.01-0.99)?"))
+            test_percentage = float(input("What ratio of data would you like to use for testing (0.01-0.99)? "))
             if 0.01 <= test_percentage <= 0.99:
                 return test_percentage
             else:
